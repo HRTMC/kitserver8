@@ -422,7 +422,7 @@ void bootservCopyPlayerData(PLAYER_INFO* players, int place, bool writeList)
 
     if (place==2)
     {
-        DWORD menuMode = *(DWORD*)data[MENU_MODE_IDX];
+        DWORD menuMode = *(DWORD*)::data[MENU_MODE_IDX];
         if (menuMode==NETWORK_MODE && !_bootserv_config._enable_online)
             return;
 
@@ -705,13 +705,13 @@ DWORD GetIdByPlayerIndex(DWORD idx)
     if (idx >= MAX_PLAYERS)
         return 0xffffffff;
 
-    PLAYER_INFO* players = (PLAYER_INFO*)(*(DWORD**)data[EDIT_DATA_PTR] + 1);
+    PLAYER_INFO* players = (PLAYER_INFO*)(*(DWORD**)::data[EDIT_DATA_PTR] + 1);
     return players[idx].id;
 }
 
 WORD GetIndexByPlayerId(DWORD id)
 {
-    PLAYER_INFO* players = (PLAYER_INFO*)(*(DWORD**)data[EDIT_DATA_PTR] + 1);
+    PLAYER_INFO* players = (PLAYER_INFO*)(*(DWORD**)::data[EDIT_DATA_PTR] + 1);
     for (int idx=0; idx<MAX_PLAYERS; idx++)
         if (players[idx].id == id)
             return idx;
@@ -834,7 +834,7 @@ void GetCurrentTeams(WORD& home, WORD& away)
 {
     home = 0xffff; away = 0xffff;
     NEXT_MATCH_DATA_INFO* pNM = 
-        *(NEXT_MATCH_DATA_INFO**)data[NEXT_MATCH_DATA_PTR];
+        *(NEXT_MATCH_DATA_INFO**)::data[NEXT_MATCH_DATA_PTR];
     if (pNM && pNM->home) home = pNM->home->teamId;
     if (pNM && pNM->away) away = pNM->away->teamId;
 }

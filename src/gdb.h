@@ -3,6 +3,9 @@
 
 #include <windows.h>
 #include <map>
+#ifndef _SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS
+#define _SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS
+#endif
 #include <hash_map>
 #include <string>
 

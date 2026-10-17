@@ -877,7 +877,7 @@ KEXPORT char* stadGetStadiumName(char* orgName)
 void GetCurrentTeams(WORD& home, WORD& away)
 {
     NEXT_MATCH_DATA_INFO* pNM = 
-        *(NEXT_MATCH_DATA_INFO**)data[NEXT_MATCH_DATA_PTR];
+        *(NEXT_MATCH_DATA_INFO**)::data[NEXT_MATCH_DATA_PTR];
     if (pNM && pNM->home) home = pNM->home->teamId;
     if (pNM && pNM->away) away = pNM->away->teamId;
 }

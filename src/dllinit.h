@@ -78,9 +78,9 @@ inline void copyAdresses()
 		ZeroMemory(code, sizeof(code));
 		
 	if (dataArray)
-		memcpy(data, dataArray[gameVersion], sizeof(data));
+		memcpy(::data, dataArray[gameVersion], sizeof(::data));
 	else
-		ZeroMemory(data, sizeof(data));
+		ZeroMemory(::data, sizeof(::data));
 
 	return;
 }

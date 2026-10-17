@@ -5,6 +5,10 @@ const wchar_t* _getTransl(char* section, char* key);
 
 using namespace std;
 #if _CPPLIB_VER >= 503
+#ifndef _SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS
+#define _SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS
+#endif
+#include <hash_map>
 using namespace stdext;
 #endif
 

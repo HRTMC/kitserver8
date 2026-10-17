@@ -241,7 +241,7 @@ WORD GetTeamIdByIndex(int index)
 {
     if (index < 0 || index >= NUM_TEAMS_TOTAL)
         return 0xffff; // invalid index
-    TEAM_NAME* teamName = **(TEAM_NAME***)data[TEAM_NAMES];
+    TEAM_NAME* teamName = **(TEAM_NAME***)::data[TEAM_NAMES];
     return teamName[index].teamId;
 }
 
@@ -249,13 +249,13 @@ char* GetTeamNameByIndex(int index)
 {
     if (index < 0 || index >= NUM_TEAMS_TOTAL)
         return NULL; // invalid index
-    TEAM_NAME* teamName = **(TEAM_NAME***)data[TEAM_NAMES];
+    TEAM_NAME* teamName = **(TEAM_NAME***)::data[TEAM_NAMES];
     return (char*)&(teamName[index].name);
 }
 
 char* GetTeamNameById(WORD id)
 {
-    TEAM_NAME* teamName = **(TEAM_NAME***)data[TEAM_NAMES];
+    TEAM_NAME* teamName = **(TEAM_NAME***)::data[TEAM_NAMES];
     for (int i=0; i<NUM_TEAMS_TOTAL; i++)
     {
         if (teamName[i].teamId == id)
@@ -266,7 +266,7 @@ char* GetTeamNameById(WORD id)
 
 WORD GetTeamIndexById(WORD id)
 {
-    TEAM_NAME* teamName = **(TEAM_NAME***)data[TEAM_NAMES];
+    TEAM_NAME* teamName = **(TEAM_NAME***)::data[TEAM_NAMES];
     for (int i=0; i<NUM_TEAMS_TOTAL; i++)
     {
         if (teamName[i].teamId == id)
@@ -430,8 +430,8 @@ KEXPORT void kservAfterReadNames()
 void DumpSlotsInfo()
 {
     // team names are stored in Utf-8, so we write the bytes as is.
-    TEAM_KIT_INFO* teamKitInfo = (TEAM_KIT_INFO*)(*(DWORD*)data[PLAYERS_DATA] 
-            + data[TEAM_KIT_INFO_OFFSET]);
+    TEAM_KIT_INFO* teamKitInfo = (TEAM_KIT_INFO*)(*(DWORD*)::data[PLAYERS_DATA] 
+            + ::data[TEAM_KIT_INFO_OFFSET]);
     LOG1N(L"teamKitInfo = %08x", (DWORD)teamKitInfo);
 
     wstring filename(getPesInfo()->myDir);
@@ -452,8 +452,8 @@ void DumpSlotsInfo()
 void InitSlotMapInThread(TEAM_KIT_INFO* teamKitInfo)
 {
     if (!teamKitInfo)
-        teamKitInfo = (TEAM_KIT_INFO*)(*(DWORD*)data[PLAYERS_DATA] 
-                + data[TEAM_KIT_INFO_OFFSET]);
+        teamKitInfo = (TEAM_KIT_INFO*)(*(DWORD*)::data[PLAYERS_DATA] 
+                + ::data[TEAM_KIT_INFO_OFFSET]);
 
     DWORD threadId;
     HANDLE initThread = CreateThread( 
@@ -470,8 +470,8 @@ DWORD WINAPI InitSlotMap(LPCVOID param)
     EnterCriticalSection(&_cs);
     TEAM_KIT_INFO* teamKitInfo = (TEAM_KIT_INFO*)param;
     if (!teamKitInfo)
-        teamKitInfo = (TEAM_KIT_INFO*)(*(DWORD*)data[PLAYERS_DATA] 
-                + data[TEAM_KIT_INFO_OFFSET]);
+        teamKitInfo = (TEAM_KIT_INFO*)(*(DWORD*)::data[PLAYERS_DATA] 
+                + ::data[TEAM_KIT_INFO_OFFSET]);
 
     _slotMap.clear();
     _reverseSlotMap.clear();
@@ -554,7 +554,7 @@ DWORD WINAPI InitSlotMap(LPCVOID param)
     if (getPesInfo()->gameVersion < gvPES2009v120)
     {
         // rewrite memory location that holds the number of kit-slots
-        DWORD* pNumSlots = (DWORD*)data[NUM_SLOTS_PTR];
+        DWORD* pNumSlots = (DWORD*)::data[NUM_SLOTS_PTR];
         if (pNumSlots) 
         {
             DWORD protection = 0;
@@ -661,7 +661,7 @@ void kservReadEditData(LPCVOID buf, DWORD size)
 
     // initialize kit slots
     TEAM_KIT_INFO* teamKitInfo = (TEAM_KIT_INFO*)((BYTE*)buf 
-            + 0x120 + data[TEAM_KIT_INFO_OFFSET] - 8);
+            + 0x120 + ::data[TEAM_KIT_INFO_OFFSET] - 8);
     InitSlotMap(teamKitInfo);
 }
 
@@ -673,7 +673,7 @@ void kservWriteEditData(LPCVOID buf, DWORD size)
     // undo re-linking: we don't want dynamic relinking
     // to be saved in PES2009_EDIT01.bin
     TEAM_KIT_INFO* teamKitInfo = (TEAM_KIT_INFO*)((BYTE*)buf 
-            + 0x120 + data[TEAM_KIT_INFO_OFFSET] - 8);
+            + 0x120 + ::data[TEAM_KIT_INFO_OFFSET] - 8);
     UndoRelinks(teamKitInfo);
 }
 
@@ -1525,7 +1525,7 @@ void kservReadNumSlotsCallPoint4()
 
 KEXPORT DWORD kservReadNumSlots(DWORD slot)
 {
-    DWORD* pNumSlots = (DWORD*)data[NUM_SLOTS_PTR];
+    DWORD* pNumSlots = (DWORD*)::data[NUM_SLOTS_PTR];
     if (slot >= XSLOT_FIRST)
         return XSLOT_LAST+1;
     return *pNumSlots;

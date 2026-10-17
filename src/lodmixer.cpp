@@ -209,10 +209,10 @@ void getResolution(DWORD& width, DWORD& height)
     DWORD newProtection = PAGE_EXECUTE_READWRITE;
 
     // get resolution
-    if (VirtualProtect((BYTE*)data[SCREEN_WIDTH], 4, newProtection, &protection))
-        width = *(DWORD*)data[SCREEN_WIDTH]; 
-    if (VirtualProtect((BYTE*)data[SCREEN_HEIGHT], 4, newProtection, &protection))
-        height = *(DWORD*)data[SCREEN_HEIGHT];
+    if (VirtualProtect((BYTE*)::data[SCREEN_WIDTH], 4, newProtection, &protection))
+        width = *(DWORD*)::data[SCREEN_WIDTH]; 
+    if (VirtualProtect((BYTE*)::data[SCREEN_HEIGHT], 4, newProtection, &protection))
+        height = *(DWORD*)::data[SCREEN_HEIGHT];
 }
 
 void setResolution(DWORD width, DWORD height)
@@ -223,10 +223,10 @@ void setResolution(DWORD width, DWORD height)
     // set resolution
     if (width>0 && height>0)
     {
-        if (VirtualProtect((BYTE*)data[SCREEN_WIDTH], 4, newProtection, &protection))
-            *(DWORD*)data[SCREEN_WIDTH] = width;
-        if (VirtualProtect((BYTE*)data[SCREEN_HEIGHT], 4, newProtection, &protection))
-            *(DWORD*)data[SCREEN_HEIGHT] = height;
+        if (VirtualProtect((BYTE*)::data[SCREEN_WIDTH], 4, newProtection, &protection))
+            *(DWORD*)::data[SCREEN_WIDTH] = width;
+        if (VirtualProtect((BYTE*)::data[SCREEN_HEIGHT], 4, newProtection, &protection))
+            *(DWORD*)::data[SCREEN_HEIGHT] = height;
 
         LOG2N(L"Resolution set: %dx%d", width, height);
     }
@@ -242,16 +242,16 @@ void setAspectRatio(float aspectRatio, bool manual)
 
     if (fabs(aspectRatio - 1.33333) < fabs(aspectRatio - 1.77777)) {
         // closer to 4:3
-        *(DWORD*)data[WIDESCREEN_FLAG] = 0;
-        if (VirtualProtect((BYTE*)data[RATIO_4on3], 4, newProtection, &protection)) {
-            *(float*)data[RATIO_4on3] = aspectRatio;
+        *(DWORD*)::data[WIDESCREEN_FLAG] = 0;
+        if (VirtualProtect((BYTE*)::data[RATIO_4on3], 4, newProtection, &protection)) {
+            *(float*)::data[RATIO_4on3] = aspectRatio;
         }
         LOG(L"Widescreen mode: no");
     } else {
         // closer to 16:9
-        *(DWORD*)data[WIDESCREEN_FLAG] = 1;
-        if (VirtualProtect((BYTE*)data[RATIO_16on9], 4, newProtection, &protection)) {
-            *(float*)data[RATIO_16on9] = aspectRatio;
+        *(DWORD*)::data[WIDESCREEN_FLAG] = 1;
+        if (VirtualProtect((BYTE*)::data[RATIO_16on9], 4, newProtection, &protection)) {
+            *(float*)::data[RATIO_16on9] = aspectRatio;
         }
         LOG(L"Widescreen mode: yes");
     }
@@ -263,17 +263,17 @@ void setSwitchesForLOD(float switch1, float switch2)
 {
 	DWORD protection;
     DWORD newProtection = PAGE_EXECUTE_READWRITE;
-    if (_lmconfig.lod.switch1 > FLOAT_ZERO && data[LOD_SWITCH1]) 
+    if (_lmconfig.lod.switch1 > FLOAT_ZERO && ::data[LOD_SWITCH1]) 
     {
-        if (VirtualProtect((BYTE*)data[LOD_SWITCH1], 4, newProtection, &protection)) {
-            *(float*)data[LOD_SWITCH1] = switch1;
+        if (VirtualProtect((BYTE*)::data[LOD_SWITCH1], 4, newProtection, &protection)) {
+            *(float*)::data[LOD_SWITCH1] = switch1;
             LOG1F(L"LOD: 1st switch (0->1) set to: %0.5f", switch1);
         }
     }
-    if (_lmconfig.lod.switch2 > FLOAT_ZERO && data[LOD_SWITCH2]) 
+    if (_lmconfig.lod.switch2 > FLOAT_ZERO && ::data[LOD_SWITCH2]) 
     {
-        if (VirtualProtect((BYTE*)data[LOD_SWITCH2], 4, newProtection, &protection)) {
-            *(float*)data[LOD_SWITCH2] = switch2;
+        if (VirtualProtect((BYTE*)::data[LOD_SWITCH2], 4, newProtection, &protection)) {
+            *(float*)::data[LOD_SWITCH2] = switch2;
             LOG1F(L"LOD: 2nd switch (1->2) set to: %0.5f", switch2);
         }
     }

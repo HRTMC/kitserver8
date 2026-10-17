@@ -225,7 +225,7 @@ void initAddresses()
 {
 	// select correct addresses
 	memcpy(code, codeArray[g_pesinfo.gameVersion], sizeof(code));
-	memcpy(data, dataArray[g_pesinfo.gameVersion], sizeof(data));
+	memcpy(::data, dataArray[g_pesinfo.gameVersion], sizeof(::data));
 	memcpy(ltfpPatch, ltfpPatchArray[g_pesinfo.gameVersion], sizeof(ltfpPatch));
 	
 	ZeroMemory(myFonts, 4*100*sizeof(ID3DXFont*));
@@ -389,7 +389,7 @@ HRESULT STDMETHODCALLTYPE newCreateDevice(IDirect3D9* self, UINT Adapter,
     */
 	}
 
-    g_menuMode = data[MENU_MODE_IDX];
+    g_menuMode = ::data[MENU_MODE_IDX];
     HookCallPoint(code[C_ADD_MENUMODE], hookAddMenuModeCallPoint, 6, 2);
     HookCallPoint(code[C_SUB_MENUMODE], hookSubMenuModeCallPoint, 6, 2);
 
@@ -692,8 +692,8 @@ void prepareRenderPlayers() {
 	DWORD replayTeamInfo[2], firstReplayPlayerInfo[2], lastReplayPlayerInfo[2];
 	DWORD playerInfo;
 	
-	DWORD generalInfo = *(DWORD*)(data[GENERALINFO]);
-	DWORD replayGeneralInfo = *(DWORD*)(data[REPLAYGENERALINFO]);
+	DWORD generalInfo = *(DWORD*)(::data[GENERALINFO]);
+	DWORD replayGeneralInfo = *(DWORD*)(::data[REPLAYGENERALINFO]);
 	
 	for (int i = 0; i < 2; i++) {
 		if (generalInfo) {
@@ -708,7 +708,7 @@ void prepareRenderPlayers() {
 		}
 	}
 	
-	DWORD* startVal = *(DWORD**)(data[PLAYERDATA]);
+	DWORD* startVal = *(DWORD**)(::data[PLAYERDATA]);
 	DWORD* nextVal = (DWORD*)*startVal;
 	
 	while (nextVal != startVal) {
@@ -728,7 +728,7 @@ void prepareRenderPlayers() {
 		tpi.epiMode = EPIMODE_NO;
 		epi = NULL;
 		
-		tpi.referee = (*(DWORD*)temp == data[ISREFEREEADDR])?1:0;
+		tpi.referee = (*(DWORD*)temp == ::data[ISREFEREEADDR])?1:0;
 		if (!tpi.referee) {
 			// for players
 			
@@ -1144,11 +1144,11 @@ KEXPORT void addMenuCallback(MENU_EVENT_CALLBACK callback)
  */
 void hookTriggerSelectionOverlay(int delta)
 {
-    DWORD menuMode = *(DWORD*)data[MENU_MODE_IDX];
-    DWORD menuMode2 = *(DWORD*)(data[MENU_MODE_IDX]+8);
-    DWORD ind = *(DWORD*)data[MAIN_SCREEN_INDICATOR];
-    DWORD inGameInd = *(DWORD*)data[INGAME_INDICATOR];
-    DWORD cupModeInd = *(DWORD*)data[CUP_MODE_PTR];
+    DWORD menuMode = *(DWORD*)::data[MENU_MODE_IDX];
+    DWORD menuMode2 = *(DWORD*)(::data[MENU_MODE_IDX]+8);
+    DWORD ind = *(DWORD*)::data[MAIN_SCREEN_INDICATOR];
+    DWORD inGameInd = *(DWORD*)::data[INGAME_INDICATOR];
+    DWORD cupModeInd = *(DWORD*)::data[CUP_MODE_PTR];
 
     // call the menu-mode change callbacks
     for (list<MENU_EVENT_CALLBACK>::iterator it = _menu_callbacks.begin();
@@ -1393,7 +1393,7 @@ BOOL WINAPI hookWriteFile(
 )
 {
     TRACE1N(L"WriteFile: len=%d", nNumberOfBytesToWrite);
-    if (nNumberOfBytesToWrite == data[EDIT_DATA_SIZE])  // edit data
+    if (nNumberOfBytesToWrite == ::data[EDIT_DATA_SIZE])  // edit data
     {
         LOG(L"Saving Edit Data...");
 
@@ -1407,10 +1407,10 @@ BOOL WINAPI hookWriteFile(
         DWORD* pChecksum = (DWORD*)((BYTE*)lpBuffer + 0x108);
         *pChecksum = 0;
         *pChecksum = GetCRC((BYTE*)lpBuffer + 0x100, 
-                data[EDIT_DATA_SIZE] - 0x100);
+                ::data[EDIT_DATA_SIZE] - 0x100);
     }
 
-    else if (nNumberOfBytesToWrite == data[REPLAY_DATA_SIZE])  // replay data
+    else if (nNumberOfBytesToWrite == ::data[REPLAY_DATA_SIZE])  // replay data
     {
         LOG(L"Saving Replay Data...");
 
@@ -1424,7 +1424,7 @@ BOOL WINAPI hookWriteFile(
         DWORD* pChecksum = (DWORD*)((BYTE*)lpBuffer + 0x108);
         *pChecksum = 0;
         *pChecksum = GetCRC((BYTE*)lpBuffer + 0x100, 
-                data[REPLAY_DATA_SIZE] - 0x100);
+                ::data[REPLAY_DATA_SIZE] - 0x100);
     }
 
     BOOL result = _writeFile(
@@ -1434,9 +1434,9 @@ BOOL WINAPI hookWriteFile(
             lpNumberOfBytesWritten,
             lpOverlapped);
 
-    if (result && nNumberOfBytesToWrite == data[EDIT_DATA_SIZE])
+    if (result && nNumberOfBytesToWrite == ::data[EDIT_DATA_SIZE])
         LOG(L"Edit Data SAVED.");
-    else if (result && nNumberOfBytesToWrite == data[REPLAY_DATA_SIZE])
+    else if (result && nNumberOfBytesToWrite == ::data[REPLAY_DATA_SIZE])
         LOG(L"Replay Data SAVED.");
 
     return result;
@@ -1465,7 +1465,7 @@ BOOL WINAPI hookReadFile(
     if (!result)
         return result;  // failed to read: return quickly.
 
-    if (nNumberOfBytesToRead == data[EDIT_DATA_SIZE])  // edit data
+    if (nNumberOfBytesToRead == ::data[EDIT_DATA_SIZE])  // edit data
     {
         LOG(L"Loading Edit Data...");
 
@@ -1479,10 +1479,10 @@ BOOL WINAPI hookReadFile(
         DWORD* pChecksum = (DWORD*)((BYTE*)lpBuffer + 0x108);
         *pChecksum = 0;
         *pChecksum = GetCRC((BYTE*)lpBuffer + 0x100, 
-                data[EDIT_DATA_SIZE] - 0x100);
+                ::data[EDIT_DATA_SIZE] - 0x100);
     }
 
-    else if (nNumberOfBytesToRead == data[REPLAY_DATA_SIZE])  // replay data
+    else if (nNumberOfBytesToRead == ::data[REPLAY_DATA_SIZE])  // replay data
     {
         LOG(L"Loading Replay Data...");
 
@@ -1496,12 +1496,12 @@ BOOL WINAPI hookReadFile(
         DWORD* pChecksum = (DWORD*)((BYTE*)lpBuffer + 0x108);
         *pChecksum = 0;
         *pChecksum = GetCRC((BYTE*)lpBuffer + 0x100, 
-                data[REPLAY_DATA_SIZE] - 0x100);
+                ::data[REPLAY_DATA_SIZE] - 0x100);
     }
 
-    if (result && nNumberOfBytesToRead == data[EDIT_DATA_SIZE])
+    if (result && nNumberOfBytesToRead == ::data[EDIT_DATA_SIZE])
         LOG(L"Edit Data LOADED.");
-    else if (result && nNumberOfBytesToRead == data[REPLAY_DATA_SIZE])
+    else if (result && nNumberOfBytesToRead == ::data[REPLAY_DATA_SIZE])
         LOG(L"Replay Data LOADED.");
 
     return result;
@@ -1561,7 +1561,7 @@ void hookAtCopyEditDataCallPoint()
 DWORD hookAtCopyEditData2(DWORD dest, DWORD src, DWORD len)
 {
     DWORD result = _org_copyData2(dest, src, len);
-    DWORD *data_ptr = (DWORD*)data[EDIT_DATA_PTR];
+    DWORD *data_ptr = (DWORD*)::data[EDIT_DATA_PTR];
     if (data_ptr && dest==(*data_ptr)+4) // player data being modified
     {
         LOG(L"data copy: default player data loaded");

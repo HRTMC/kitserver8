@@ -322,7 +322,7 @@ void fservCopyPlayerData(PLAYER_INFO* players, int place, bool writeList)
 {
     if (place==2)
     {
-        DWORD menuMode = *(DWORD*)data[MENU_MODE_IDX];
+        DWORD menuMode = *(DWORD*)::data[MENU_MODE_IDX];
         if (menuMode==NETWORK_MODE && !_fserv_config._enable_online)
             return;
     }
@@ -424,7 +424,7 @@ void GetSlotsByPlayerIndex(DWORD idx, DWORD& faceSlot, DWORD& hairSlot)
     if (idx >= MAX_PLAYERS)
         return;
 
-    PLAYER_INFO* players = (PLAYER_INFO*)(*(DWORD**)data[EDIT_DATA_PTR] + 1);
+    PLAYER_INFO* players = (PLAYER_INFO*)(*(DWORD**)::data[EDIT_DATA_PTR] + 1);
     hash_map<DWORD,WORD>::iterator sit;
     sit = _player_face_slot.find(players[idx].id);
     if (sit != _player_face_slot.end())

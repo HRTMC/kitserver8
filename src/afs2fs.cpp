@@ -74,7 +74,7 @@ wchar_t* GetBinFileName(DWORD afsId, DWORD binId)
     if (afsId < 0 || MAX_FOLDERS-1 < afsId) return NULL; // safety check
     if (!_fast_info_cache[afsId].initialized)
     {
-        BIN_SIZE_INFO* pBST = ((BIN_SIZE_INFO**)data[BIN_SIZES_TABLE])[afsId];
+        BIN_SIZE_INFO* pBST = ((BIN_SIZE_INFO**)::data[BIN_SIZES_TABLE])[afsId];
         if (pBST) 
         {
             hash_map<string,wchar_t*>::iterator it = (afsId!=15)?
@@ -308,12 +308,12 @@ HRESULT STDMETHODCALLTYPE initModule(IDirect3D9* self, UINT Adapter,
         LOG1N(L"Songs-map read (size=%d)",_songs->_songMap.size());
 
         // apply songs info
-        BYTE* bptr = (BYTE*)data[SONGS_INFO_TABLE];
+        BYTE* bptr = (BYTE*)::data[SONGS_INFO_TABLE];
         DWORD protection = 0;
         DWORD newProtection = PAGE_READWRITE;
         if (VirtualProtect(bptr, NUM_SONGS*sizeof(SONG_STRUCT), newProtection, &protection)) 
         {
-            SONG_STRUCT* ss = (SONG_STRUCT*)data[SONGS_INFO_TABLE];
+            SONG_STRUCT* ss = (SONG_STRUCT*)::data[SONGS_INFO_TABLE];
             for (int i=0; i<NUM_SONGS; i++)
             {
                 hash_map<WORD,SONG_STRUCT>::iterator it = _songs->_songMap.find(ss[i].binId);
@@ -333,12 +333,12 @@ HRESULT STDMETHODCALLTYPE initModule(IDirect3D9* self, UINT Adapter,
         LOG1N(L"Balls-map read (size=%d)",_balls->_ballMap.size());
 
         // apply balls info
-        bptr = (BYTE*)data[BALLS_INFO_TABLE];
+        bptr = (BYTE*)::data[BALLS_INFO_TABLE];
         protection = 0;
         newProtection = PAGE_READWRITE;
         if (VirtualProtect(bptr, NUM_BALLS*sizeof(char**), newProtection, &protection)) 
         {
-            char** names = (char**)data[BALLS_INFO_TABLE];
+            char** names = (char**)::data[BALLS_INFO_TABLE];
             for (int i=1; i<=NUM_BALLS; i++)
             {
                 hash_map<WORD,BALL_STRUCT>::iterator it = _balls->_ballMap.find(i);
@@ -387,7 +387,7 @@ bool afsGetFileInfo(DWORD afsId, DWORD binId, HANDLE& hfile, DWORD& fsize)
         return false;
     LOG1S(L"file = {%s}",file);
 
-    BIN_SIZE_INFO* pBST = ((BIN_SIZE_INFO**)data[BIN_SIZES_TABLE])[afsId];
+    BIN_SIZE_INFO* pBST = ((BIN_SIZE_INFO**)::data[BIN_SIZES_TABLE])[afsId];
     wchar_t* afsDir = (afsId!=15)?
         Utf8::ansiToUnicode(pBST->relativePathName):
         Utf8::ansiToUnicode(".\\img\\cv0f.img");
