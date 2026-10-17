@@ -1,0 +1,54 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # VS 2022 toolchain, pinned so the build does not change under you
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The game is 32-bit, so build x86
+      - name: Set up MSVC (x86)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
+      # d3dx9.h / d3dx9.lib (DirectX SDK June 2010) from NuGet. The old SDK
+      # installer is unreliable on CI runners.
+      - name: Get d3dx9 headers and libs
+        shell: pwsh
+        run: |
+          $dx = Join-Path $env:RUNNER_TEMP 'dx'
+          nuget install Microsoft.DXSDK.D3DX -Version 9.29.952.8 -OutputDirectory $dx | Out-Null
+          $inc = (Get-ChildItem $dx -Recurse -Filter d3dx9.h   | Select-Object -First 1).DirectoryName
+          $lib = (Get-ChildItem $dx -Recurse -Filter d3dx9.lib |
+                  Where-Object { $_.FullName -match '[\\/]x86[\\/]' } |
+                  Select-Object -First 1).DirectoryName
+          if (-not $inc -or -not $lib) { throw 'd3dx9 headers/libs not found in NuGet package' }
+          Write-Host "include: $inc"
+          Write-Host "lib:     $lib"
+          "INCLUDE=$inc;$env:INCLUDE" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "LIB=$lib;$env:LIB"         | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      # Plain `nmake all` gives the release flags (/DMYDLL_RELEASE_BUILD);
+      # `debug=1` would switch to /DDEBUG. Output lands in src\output.
+      - name: Build
+        working-directory: src
+        shell: cmd
+        run: nmake /nologo all
+
+      - name: List output
+        shell: pwsh
+        run: Get-ChildItem src/output | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kitserver8-pes2009
+          path: src/output/
+          if-no-files-found: error
