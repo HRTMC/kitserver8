@@ -38,9 +38,17 @@ jobs:
 
       # Plain `nmake all` gives the release flags (/DMYDLL_RELEASE_BUILD);
       # `debug=1` would switch to /DDEBUG. Output lands in src\output.
+      # This code is from the VS2008 era. MSVC reads the CL environment variable
+      # on every compile (also in the nested pngdib build), so these defines need
+      # no source or Makefile changes:
+      #  - hash_map is still used all over; modern MSVC makes it an error unless silenced
+      #  - the old 3-argument swprintf(buf, fmt, ...) form needs the non-conforming flag
+      #  - the rest only silence CRT deprecation warnings
       - name: Build
         working-directory: src
         shell: cmd
+        env:
+          CL: /D_SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS /D_CRT_NON_CONFORMING_SWPRINTFS /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS
         run: nmake /nologo all
 
       - name: List output
