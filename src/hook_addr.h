@@ -104,8 +104,16 @@ DWORD codeArray[][CODELEN] = {
   NOCODEADDR
   // PES2009 PC 1.30
   NOCODEADDR
-  // PES2009 PC 1.40
-  NOCODEADDR
+  // PES2009 PC 1.40  (ported from 1.20 by static analysis; untested in-game)
+  {
+		0xe268b5,
+		0, 0, 
+		0, 0, 
+		0, 0, 
+        0, 0, //TOFIX
+        0xc53691, 0xc5321d,
+        0, 0, //TOFIX
+  },
   // PES2010 DEMO
   {
 		0xb91895,
@@ -206,7 +214,13 @@ DWORD dataArray[][DATALEN] = {
     // PES2009 PC 1.30
 	NODATAADDR
     // PES2009 PC 1.40
-	NODATAADDR
+    {
+        0, 0,
+        0, 0,
+        0x167d1cc, 0x0, 0x0, //TOFIX
+        0x167cf14, 0x0, 0x167cf04, //TOFIX
+        0x392f10, 0x3fa288,
+    },
     // PES2010 DEMO
     NODATAADDR
 };

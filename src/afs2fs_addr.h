@@ -8,6 +8,7 @@ BYTE allowedGames[] = {
     gvPES2009,
     gvPES2009v110,
     gvPES2009v120,
+    gvPES2009v140,
     gvPES2010demo,
 };
 
@@ -100,7 +101,9 @@ DWORD dataArray[][DATALEN] = {
     // PES2009 1.30
     NODATAADDR
     // PES2009 1.40
-    NODATAADDR
+    {
+        0x170dc80, 0x101b7a8, 0xf9a37c,
+    },
     // PES2010 demo
     {
         0x11e30c0, 0, 0,

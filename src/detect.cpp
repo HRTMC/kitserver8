@@ -23,8 +23,8 @@ wchar_t* GAME[] = {
     L"PES2009 PC 1.20",
         L"[Settings] PES2009 PC DEMO",
         L"[Settings] PES2009 PC",
-    L"PES2009 PC 1.30",
     L"PES2009 PC 1.40",
+    L"PES2009 PC 1.30",
     L"PES2010 PC Demo",
 };
 char* GAME_GUID[] = {
@@ -43,11 +43,15 @@ char* GAME_GUID[] = {
     "Pro Evolution Soccer 2009",
     "Pro Evolution Soccer 2009 DEMO",
     "Pro Evolution Soccer 2009",
-    "Pro Evolution Soccer 2009",
+    // PES2009 PC 1.40: its text strings are at the same place as in 1.30, so the
+    // name cannot tell them apart. Use 16 code bytes (no NULs) instead; they contain the
+    // address of a 1.40 global, so they only match the 1.40 layout. This entry has to
+    // stay BEFORE the 1.30 one, because the search stops at the first match.
+    "\x8b\x3d\x14\xcf\x67\x01\x85\xff\x74\x36\x53\x8b\x5c\x24\x0c\x56",
     "Pro Evolution Soccer 2009",
     "Pro Evolution Soccer 2010 DEMO",
 };
-DWORD GAME_GUID_OFFSETS[] = { 0x67aca8, 0x5b5c4, 0x994e74, 0x5ec34, 0x3e0, 0x977c50, 0x977c50, 0x978be8, 0x16e, 0xa5db00, 0xbd0b80, 0xbd0b70, 0xb80874,  0xa74a3, 0xaa757, 0xb84c6c, 0xb84c6c, 0x9d717c };
+DWORD GAME_GUID_OFFSETS[] = { 0x67aca8, 0x5b5c4, 0x994e74, 0x5ec34, 0x3e0, 0x977c50, 0x977c50, 0x978be8, 0x16e, 0xa5db00, 0xbd0b80, 0xbd0b70, 0xb80874,  0xa74a3, 0xaa757, 0x11ebe1, 0xb84c6c, 0x9d717c };
 BYTE BASE_GAME[] = {
     gvPES2008demo,
     gvPES2008demoSet,
@@ -64,8 +68,8 @@ BYTE BASE_GAME[] = {
     gvPES2009v120,
     gvPES2009demoSet,
     gvPES2009Set,
-    gvPES2009v130,
     gvPES2009v140,
+    gvPES2009v130,
     gvPES2010demo,
 };
 
