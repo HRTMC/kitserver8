@@ -7,17 +7,37 @@ on:
 
 jobs:
   build:
-    # VS 2022 toolchain, pinned so the build does not change under you
+    # The runner has VS 2022, whose own toolset (v143) cannot target Windows XP.
+    # So the VS 2017 (v141, MSVC 14.16) toolset and the XP support component are
+    # installed next to it, and that toolset does the compiling.
     runs-on: windows-2022
 
     steps:
       - uses: actions/checkout@v4
 
-      # The game is 32-bit, so build x86
-      - name: Set up MSVC (x86)
+      - name: Install VS 2017 (v141) toolset and Windows XP support
+        shell: pwsh
+        run: |
+          $installerDir = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          $vs = & "$installerDir\vswhere.exe" -latest -products * -property installationPath
+          Write-Host "Visual Studio: $vs"
+          $vsArgs = "modify --installPath `"$vs`" " +
+                    "--add Microsoft.VisualStudio.Component.VC.v141.x86.x64 " +
+                    "--add Microsoft.VisualStudio.Component.WinXP " +
+                    "--quiet --norestart --nocache"
+          $p = Start-Process "$installerDir\setup.exe" -ArgumentList $vsArgs -Wait -PassThru
+          # 3010 = success, reboot pending (not needed here)
+          if ($p.ExitCode -notin 0, 3010) { throw "VS installer failed with exit code $($p.ExitCode)" }
+          $v141 = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Where-Object Name -like '14.16*'
+          if (-not $v141) { throw 'v141 (MSVC 14.16) toolset was not installed' }
+          Write-Host "v141 toolset: $($v141.Name)"
+
+      # The game is 32-bit, so build x86 with the VS 2017 compiler
+      - name: Set up MSVC 14.16 (VS 2017, x86)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x86
+          toolset: '14.16'
 
       # d3dx9.h / d3dx9.lib (DirectX SDK June 2010) from NuGet. The old SDK
       # installer is unreliable on CI runners.
@@ -36,20 +56,94 @@ jobs:
           "INCLUDE=$inc;$env:INCLUDE" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "LIB=$lib;$env:LIB"         | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
+      # What the v141_xp platform toolset does in MSBuild: use the Windows 7.1A
+      # SDK headers/libs (installed by the XP support component).
+      - name: Use the Windows 7.1A SDK (XP-era headers and libs)
+        shell: pwsh
+        run: |
+          $sdk = "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v7.1A"
+          if (Test-Path "$sdk\Include\windows.h") {
+            Write-Host "7.1A SDK: $sdk"
+            "INCLUDE=$sdk\Include;$env:INCLUDE" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+            "LIB=$sdk\Lib;$env:LIB"             | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          } else {
+            Write-Warning "Windows 7.1A SDK not found at $sdk; using the Windows 10 SDK headers. The XP compatibility check below still applies."
+          }
+
       # Plain `nmake all` gives the release flags (/DMYDLL_RELEASE_BUILD);
       # `debug=1` would switch to /DDEBUG. Output lands in src\output.
-      # This code is from the VS2008 era. MSVC reads the CL environment variable
-      # on every compile (also in the nested pngdib build), so these defines need
-      # no source or Makefile changes:
-      #  - hash_map is still used all over; modern MSVC makes it an error unless silenced
-      #  - the old 3-argument swprintf(buf, fmt, ...) form needs the non-conforming flag
-      #  - the rest only silence CRT deprecation warnings
+      #
+      # MSVC reads the CL environment variable on every compile (also in the
+      # nested pngdib build), so no source or Makefile changes are needed:
+      #  XP:
+      #   /MT                      static CRT, no VC++ redistributable needed on XP
+      #   /D_USING_V110_SDK71_     what the *_xp toolsets define (older, XP-safe code paths)
+      #   /Zc:threadSafeInit-      thread-safe statics use Vista-only APIs; XP has none
+      #  VS2008-era source:
+      #   _SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS  hash_map is used all over
+      #   _CRT_NON_CONFORMING_SWPRINTFS              old 3-argument swprintf(buf, fmt, ...)
+      #   the other two only silence CRT deprecation warnings
       - name: Build
         working-directory: src
         shell: cmd
         env:
-          CL: /D_SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS /D_CRT_NON_CONFORMING_SWPRINTFS /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS
+          CL: /MT /D_USING_V110_SDK71_ /Zc:threadSafeInit- /D_SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS /D_CRT_NON_CONFORMING_SWPRINTFS /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS
         run: nmake /nologo all
+
+      # The linker marks the files as needing subsystem 6.00 (Vista) by default,
+      # and XP then refuses to load them. The Makefile defines its own LINK macro,
+      # so the LINK environment variable can't be used; patch the headers instead.
+      # Each file keeps its own subsystem (GUI/console), only the version changes.
+      # The prebuilt libpng/zlib DLLs are not ours and are left alone.
+      - name: Mark binaries as Windows XP (subsystem 5.01)
+        working-directory: src/output
+        shell: pwsh
+        run: |
+          $skip = 'libpng13.dll', 'zlib1.dll'
+          Get-ChildItem -File | Where-Object { $_.Extension -in '.dll', '.exe' -and $_.Name -notin $skip } | ForEach-Object {
+            $hdr = (dumpbin /headers $_.FullName) -join "`n"
+            $sub = if ($hdr -match 'subsystem \(Windows CUI\)') { 'CONSOLE' } else { 'WINDOWS' }
+            editbin /nologo "/SUBSYSTEM:$sub,5.01" $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "editbin failed on $($_.Name)" }
+            Write-Host "$($_.Name): $sub,5.01"
+          }
+
+      # No XP machine on the runner, so check statically: every binary must
+      # declare subsystem 5.01 and must not import a Windows API newer than XP.
+      # (Static-CRT code that needs newer APIs resolves them at run time, so it
+      # does not show up here, which is what we want.)
+      - name: Check Windows XP compatibility
+        working-directory: src/output
+        shell: pwsh
+        run: |
+          $skip = 'libpng13.dll', 'zlib1.dll'
+          $notOnXp = @(
+            'GetTickCount64', 'InitOnceExecuteOnce', 'InitOnceBeginInitialize', 'InitOnceComplete',
+            'InitializeConditionVariable', 'SleepConditionVariableCS', 'SleepConditionVariableSRW',
+            'WakeConditionVariable', 'WakeAllConditionVariable',
+            'InitializeSRWLock', 'AcquireSRWLockExclusive', 'ReleaseSRWLockExclusive',
+            'AcquireSRWLockShared', 'ReleaseSRWLockShared',
+            'InitializeCriticalSectionEx', 'CreateSymbolicLinkW', 'CreateSymbolicLinkA',
+            'GetLocaleInfoEx', 'LCMapStringEx', 'CompareStringEx', 'GetUserDefaultLocaleName',
+            'IsValidLocaleName', 'EnumSystemLocalesEx', 'GetDateFormatEx', 'GetTimeFormatEx',
+            'GetSystemTimePreciseAsFileTime', 'GetFileInformationByHandleEx', 'SetFileInformationByHandle',
+            'GetLogicalProcessorInformationEx', 'SetThreadStackGuarantee', 'CreateThreadpoolWork',
+            'GetCurrentProcessorNumberEx', 'QueryUnbiasedInterruptTime', 'GetFinalPathNameByHandleW',
+            'RegGetValueW', 'RegGetValueA', 'EventRegister', 'EventWriteTransfer', 'EventUnregister'
+          )
+          $bad = @()
+          Get-ChildItem -File | Where-Object { $_.Extension -in '.dll', '.exe' -and $_.Name -notin $skip } | ForEach-Object {
+            $name = $_.Name
+            $hdr = (dumpbin /headers $_.FullName) -join "`n"
+            if ($hdr -notmatch '5\.01 subsystem version') { $bad += "${name}: subsystem version is not 5.01" }
+            $imp = (dumpbin /imports $_.FullName) -join "`n"
+            foreach ($fn in $notOnXp) {
+              if ($imp -match "(?m)^\s+[0-9A-F]+\s+$fn\s*$") { $bad += "${name}: imports $fn (needs Vista or newer)" }
+            }
+            Write-Host "checked $name"
+          }
+          if ($bad) { $bad | ForEach-Object { Write-Error $_ }; exit 1 }
+          Write-Host 'OK: all binaries declare subsystem 5.01 and import no post-XP APIs from the deny list'
 
       - name: List output
         shell: pwsh
@@ -57,6 +151,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kitserver8-pes2009
+          name: kitserver8-pes2009-winxp
           path: src/output/
           if-no-files-found: error
