@@ -15,29 +15,76 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install VS 2017 (v141) toolset and Windows XP support
+      # Modifying the runner's preinstalled VS 2022 in place gets cancelled, so
+      # the v141 toolset goes into a separate, fresh Build Tools instance
+      # (C:\BuildTools) unless some installed instance already has it.
+      - name: Find or install the VS 2017 (v141, MSVC 14.16) toolset
         shell: pwsh
         run: |
-          $installerDir = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-          $vs = & "$installerDir\vswhere.exe" -latest -products * -property installationPath
-          Write-Host "Visual Studio: $vs"
-          $vsArgs = "modify --installPath `"$vs`" " +
-                    "--add Microsoft.VisualStudio.Component.VC.v141.x86.x64 " +
-                    "--add Microsoft.VisualStudio.Component.WinXP " +
-                    "--quiet --norestart --nocache"
-          $p = Start-Process "$installerDir\setup.exe" -ArgumentList $vsArgs -Wait -PassThru
-          # 3010 = success, reboot pending (not needed here)
-          if ($p.ExitCode -notin 0, 3010) { throw "VS installer failed with exit code $($p.ExitCode)" }
-          $v141 = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Where-Object Name -like '14.16*'
-          if (-not $v141) { throw 'v141 (MSVC 14.16) toolset was not installed' }
-          Write-Host "v141 toolset: $($v141.Name)"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vcvars = $null
+          foreach ($p in (& $vswhere -all -products * -property installationPath)) {
+            Write-Host "VS instance: $p"
+            if (Test-Path "$p\VC\Tools\MSVC\14.16*") {
+              $vcvars = "$p\VC\Auxiliary\Build\vcvarsall.bat"
+              Write-Host "  has the v141 toolset, using it"
+              break
+            }
+          }
 
-      # The game is 32-bit, so build x86 with the VS 2017 compiler
-      - name: Set up MSVC 14.16 (VS 2017, x86)
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x86
-          toolset: '14.16'
+          if (-not $vcvars) {
+            $exe = Join-Path $env:RUNNER_TEMP 'vs_BuildTools.exe'
+            Invoke-WebRequest 'https://aka.ms/vs/17/release/vs_BuildTools.exe' -OutFile $exe
+
+            function Install-BuildTools([string[]] $components) {
+              $vsArgs = @('--quiet', '--wait', '--norestart', '--nocache', '--installPath', 'C:\BuildTools')
+              foreach ($c in $components) { $vsArgs += @('--add', $c) }
+              Write-Host "vs_BuildTools.exe $($vsArgs -join ' ')"
+              $proc = Start-Process $exe -ArgumentList $vsArgs -Wait -PassThru
+              Write-Host "installer exit code: $($proc.ExitCode)"
+              # 3010 = success, reboot pending (not needed here)
+              return ($proc.ExitCode -in 0, 3010) -and (Test-Path 'C:\BuildTools\VC\Tools\MSVC\14.16*')
+            }
+
+            $ok = Install-BuildTools @('Microsoft.VisualStudio.Component.VC.v141.x86.x64',
+                                       'Microsoft.VisualStudio.Component.WinXP')
+            if (-not $ok) {
+              Write-Warning 'Install with the XP support component failed, retrying with the v141 toolset only'
+              $ok = Install-BuildTools @('Microsoft.VisualStudio.Component.VC.v141.x86.x64')
+            }
+            if (-not $ok) {
+              Get-ChildItem $env:TEMP -Filter 'dd_*.log' -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 2 | ForEach-Object {
+                  Write-Host "----- tail of $($_.FullName)"
+                  Get-Content $_.FullName -Tail 60
+                }
+              throw 'Could not install the v141 toolset'
+            }
+            $vcvars = 'C:\BuildTools\VC\Auxiliary\Build\vcvarsall.bat'
+          }
+          if (-not (Test-Path $vcvars)) { throw "vcvarsall.bat not found: $vcvars" }
+          Write-Host "vcvarsall: $vcvars"
+
+          # Same thing ilammy/msvc-dev-cmd does: run vcvarsall for x86 with the
+          # 14.16 toolset and carry the resulting environment into the next steps.
+          $before = @{}
+          Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+          $dump = cmd /c "`"$vcvars`" x86 -vcvars_ver=14.16 >nul 2>&1 && set"
+          $n = 0
+          foreach ($line in $dump) {
+            if ($line -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
+              if ($before[$Matches[1]] -ne $Matches[2]) {
+                "$($Matches[1])=$($Matches[2])" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+                $n++
+              }
+            }
+          }
+          if ($n -eq 0) { throw 'vcvarsall.bat did not set up an environment' }
+          Write-Host "exported $n environment variables"
+
+      - name: Show compiler version
+        shell: cmd
+        run: cl 2>&1 | findstr /i "Version"
 
       # d3dx9.h / d3dx9.lib (DirectX SDK June 2010) from NuGet. The old SDK
       # installer is unreliable on CI runners.
