@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    timeout-minutes: 90
     # The runner has VS 2022, whose own toolset (v143) cannot target Windows XP.
     # So the VS 2017 (v141, MSVC 14.16) toolset and the XP support component are
     # installed next to it, and that toolset does the compiling.
@@ -19,6 +20,7 @@ jobs:
       # the v141 toolset goes into a separate, fresh Build Tools instance
       # (C:\BuildTools) unless some installed instance already has it.
       - name: Find or install the VS 2017 (v141, MSVC 14.16) toolset
+        timeout-minutes: 50
         shell: pwsh
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -40,15 +42,35 @@ jobs:
               $vsArgs = @('--quiet', '--wait', '--norestart', '--nocache', '--installPath', 'C:\BuildTools')
               foreach ($c in $components) { $vsArgs += @('--add', $c) }
               Write-Host "vs_BuildTools.exe $($vsArgs -join ' ')"
-              $proc = Start-Process $exe -ArgumentList $vsArgs -Wait -PassThru
-              Write-Host "installer exit code: $($proc.ExitCode)"
+              # No -Wait on Start-Process: it also waits for every child process the
+              # installer leaves running in the background, which can hang forever.
+              # Wait for the installer process itself and print a heartbeat, because
+              # a silent install prints nothing for many minutes.
+              $proc = Start-Process $exe -ArgumentList $vsArgs -PassThru
+              $null = $proc.Handle   # keeps ExitCode readable after exit
+              $script:sw = [Diagnostics.Stopwatch]::StartNew()
+              while (-not $proc.WaitForExit(30000)) {
+                $last = ''
+                try {
+                  $log = Get-ChildItem $env:TEMP -Filter 'dd_*.log' -ErrorAction SilentlyContinue |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                  if ($log) { $last = "[$($log.Name)] " + ((Get-Content $log.FullName -Tail 1 -ErrorAction SilentlyContinue) -join '') }
+                } catch { }
+                Write-Host ("{0:mm\:ss} installer running... {1}" -f $script:sw.Elapsed, $last)
+                if ($script:sw.Elapsed.TotalMinutes -gt 40) {
+                  Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                  Write-Warning 'Installer timed out after 40 minutes'
+                  return $false
+                }
+              }
+              Write-Host "installer exit code: $($proc.ExitCode) after $($script:sw.Elapsed.ToString('mm\:ss'))"
               # 3010 = success, reboot pending (not needed here)
-              return ($proc.ExitCode -in 0, 3010) -and (Test-Path 'C:\BuildTools\VC\Tools\MSVC\14.16*')
+              return (($proc.ExitCode -in 0, 3010) -and (Test-Path 'C:\BuildTools\VC\Tools\MSVC\14.16*'))
             }
 
             $ok = Install-BuildTools @('Microsoft.VisualStudio.Component.VC.v141.x86.x64',
                                        'Microsoft.VisualStudio.Component.WinXP')
-            if (-not $ok) {
+            if (-not $ok -and $script:sw.Elapsed.TotalMinutes -lt 30) {
               Write-Warning 'Install with the XP support component failed, retrying with the v141 toolset only'
               $ok = Install-BuildTools @('Microsoft.VisualStudio.Component.VC.v141.x86.x64')
             }
@@ -65,26 +87,59 @@ jobs:
           if (-not (Test-Path $vcvars)) { throw "vcvarsall.bat not found: $vcvars" }
           Write-Host "vcvarsall: $vcvars"
 
-          # Same thing ilammy/msvc-dev-cmd does: run vcvarsall for x86 with the
-          # 14.16 toolset and carry the resulting environment into the next steps.
+          # Run vcvarsall for x86 and carry the resulting environment into the next
+          # steps (the same thing ilammy/msvc-dev-cmd does). Its output is NOT hidden.
+          # For a side-by-side v141 install it sets up the Windows SDK part of the
+          # environment but can skip the compiler part, so the 14.16 folders are
+          # added explicitly below instead of trusting it.
           $before = @{}
           Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
-          $dump = cmd /c "`"$vcvars`" x86 -vcvars_ver=14.16 >nul 2>&1 && set"
-          $n = 0
+          $after = @{}
+          $dump = cmd /c "`"$vcvars`" x86 -vcvars_ver=14.16 2>&1 && set"
           foreach ($line in $dump) {
-            if ($line -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
-              if ($before[$Matches[1]] -ne $Matches[2]) {
-                "$($Matches[1])=$($Matches[2])" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-                $n++
-              }
+            if ($line -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') { $after[$Matches[1]] = $Matches[2] }
+            else { Write-Host "vcvarsall: $line" }
+          }
+          if ($after.Count -eq 0) { throw 'vcvarsall.bat did not set up an environment' }
+
+          $vcDir = Split-Path (Split-Path (Split-Path $vcvars -Parent) -Parent) -Parent
+          Write-Host "VC dir: $vcDir"
+          Get-ChildItem "$vcDir\Tools\MSVC" -Directory | ForEach-Object { Write-Host "  toolset folder: $($_.Name)" }
+          $tools = (Get-ChildItem "$vcDir\Tools\MSVC" -Directory | Where-Object Name -like '14.16*' | Select-Object -First 1).FullName
+          $bin = "$tools\bin\Hostx86\x86"
+          if (-not (Test-Path "$bin\cl.exe")) {
+            Get-ChildItem "$tools\bin" -Recurse -Filter cl.exe | ForEach-Object { Write-Host "  found: $($_.FullName)" }
+            throw "cl.exe not found in $bin"
+          }
+          function Add-Front([string] $name, [string[]] $dirs) {
+            $dirs = $dirs | Where-Object { Test-Path $_ }
+            $old = if ($after.ContainsKey($name)) { $after[$name] } else { '' }
+            $after[$name] = (($dirs -join ';') + ';' + $old).TrimEnd(';')
+          }
+          Add-Front 'Path'    @($bin)
+          Add-Front 'INCLUDE' @("$tools\include", "$tools\atlmfc\include")
+          Add-Front 'LIB'     @("$tools\lib\x86", "$tools\atlmfc\lib\x86")
+          $after['VCINSTALLDIR']    = "$vcDir\"
+          $after['VCToolsInstallDir'] = "$tools\"
+
+          $n = 0
+          foreach ($k in $after.Keys) {
+            if ($before[$k] -ne $after[$k]) {
+              "$k=$($after[$k])" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+              $n++
             }
           }
-          if ($n -eq 0) { throw 'vcvarsall.bat did not set up an environment' }
+          Write-Host "compiler: $bin\cl.exe"
           Write-Host "exported $n environment variables"
 
       - name: Show compiler version
         shell: cmd
-        run: cl 2>&1 | findstr /i "Version"
+        run: |
+          where cl
+          where nmake
+          where link
+          where rc
+          cl 2>&1 | findstr /i "Version"
 
       # d3dx9.h / d3dx9.lib (DirectX SDK June 2010) from NuGet. The old SDK
       # installer is unreliable on CI runners.
